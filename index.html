@@ -166,7 +166,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Camino Invoice Checker v4</h1>
+        <h1>Camino Invoice Checker v5</h1>
         
         <div class="upload-section">
             <div class="file-input">
@@ -308,7 +308,7 @@
             });
         }
 
-          async function extractKeyInfo(text, documentType) {
+          async function extractKeyInfo(text, documentType, apiKey) {
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -384,12 +384,12 @@
 
                 // Extract key information
                 stepIndicator.textContent = 'Extracting information from PO...';
-                const poSummary = await extractKeyInfo(poContent, 'Purchase Order');
+                const poSummary = await extractKeyInfo(poContent, 'Purchase Order', apiKey);
                 poExtracted.textContent = 'Purchase Order Details:\n' + poSummary;
                 poExtracted.style.display = 'block';
 
                 stepIndicator.textContent = 'Extracting information from Invoice...';
-                const invoiceSummary = await extractKeyInfo(invoiceContent, 'Invoice');
+                const invoiceSummary = await extractKeyInfo(invoiceContent, 'Invoice', apiKey);
                 invoiceExtracted.textContent = 'Invoice Details:\n' + invoiceSummary;
                 invoiceExtracted.style.display = 'block';
 

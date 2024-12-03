@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camino Invoice Checker</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/anthropic/0.4.3/anthropic.min.js"></script>
+    <title>Camino Invoice Checker v3</title>
     <style>
         :root {
             --primary: #FFB512;
@@ -175,12 +174,12 @@
             <div id="error-message" class="error-message"></div>
         </div>
 
-        <div class="loading" style="display: none;">
+        <div class="loading">
             <div class="spinner"></div>
             <p>Analyzing documents...</p>
         </div>
 
-        <div class="results" style="display: none;">
+        <div class="results">
             <div class="check-item">
                 <div class="icon">✓</div>
                 <div class="check-content">
@@ -317,57 +316,69 @@
                 console.log('Reading invoice file...');
                 const invoiceContent = await readFileAsText(invoiceFile);
 
-                // Initialize Anthropic client
-                const client = new anthropic.Client({ apiKey });
-
                 console.log('Calling API...');
-                const message = await client.messages.create({
-                    model: "claude-3-opus-20240229",
-                    max_tokens: 1024,
-                    messages: [{
-                        role: "user",
-                        content: `Analyze these documents:\n\nPO:\n${poContent}\n\nInvoice:\n${invoiceContent}\n\n
-                        Please check the following criteria and provide a response in JSON format:
-                        1. Does the invoice specify a job number (format: JJEUGA2401) and description?
-                        2. Does the invoice specify a PO number and does it match the supplied PO?
-                        3. Does the invoice address match the PO's "bill to" address?
-                        4. Does the currency match between PO and invoice?
-                        5. Is VAT correctly applied based on the billing address?
-                        6. Do the payment terms match the PO requirements?
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: "claude-3-opus-20240229",
+                        max_tokens: 1024,
+                        messages: [{
+                            role: "user",
+                            content: `Analyze these documents:\n\nPO:\n${poContent}\n\nInvoice:\n${invoiceContent}\n\n
+                            Please check the following criteria and provide a response in JSON format:
+                            1. Does the invoice specify a job number (format: JJEUGA2401) and description?
+                            2. Does the invoice specify a PO number and does it match the supplied PO?
+                            3. Does the invoice address match the PO's "bill to" address?
+                            4. Does the currency match between PO and invoice?
+                            5. Is VAT correctly applied based on the billing address?
+                            6. Do the payment terms match the PO requirements?
 
-                        Provide your response in this exact JSON format:
-                        {
-                            "jobNumber": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "poNumber": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "billingAddress": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "currency": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "vat": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "paymentTerms": {
-                                "pass": true/false,
-                                "explanation": "detailed explanation"
-                            },
-                            "summary": "A sassy, queen-like summary of the overall invoice quality"
-                        }`
-                    }]
+                            Provide your response in this exact JSON format:
+                            {
+                                "jobNumber": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "poNumber": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "billingAddress": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "currency": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "vat": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "paymentTerms": {
+                                    "pass": true/false,
+                                    "explanation": "detailed explanation"
+                                },
+                                "summary": "A sassy, queen-like summary of the overall invoice quality"
+                            }`
+                        }]
+                    })
                 });
 
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${errorData.error?.message || response.statusText}`);
+                }
+
                 console.log('Processing response...');
-                const result = JSON.parse(message.content[0].text);
+                const data = await response.json();
+                const result = JSON.parse(data.content[0].text);
                 
                 // Update the results in the UI
                 const checks = ['jobNumber', 'poNumber', 'billingAddress', 'currency', 'vat', 'paymentTerms'];

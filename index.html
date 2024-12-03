@@ -166,7 +166,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Camino Invoice Checker v5</h1>
+        <h1>Camino Invoice Checker v6</h1>
         
         <div class="upload-section">
             <div class="file-input">
@@ -308,46 +308,58 @@
             });
         }
 
-          async function extractKeyInfo(text, documentType, apiKey) {
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: "claude-3-opus-20240229",
-                    max_tokens: 1024,
-                    messages: [{
-                        role: "user",
-                        content: `Extract only the following key information from this ${documentType}. Format your response as a list with labels:
+async function extractKeyInfo(text, documentType, apiKey) {
+    let prompt;
+    
+    if (documentType === 'Invoice') {
+        prompt = `Extract these exact fields from this Camino invoice:
 
-                        - Job number and description (format like JJEUGA2401)
-                        - PO number
-                        - Billing/Invoice address
-                        - Currency and amounts
-                        - VAT details (rate and registration number if present)
-                        - Payment terms (days)
+        1. Job number: Find the code in format JJXXXX2401 at the start of the Subject line
+        2. PO number: Find the exact number after "PO number"
+        3. Billing address: Extract the complete address after "Invoice for"
+        4. Currency and amount: Find the grand total with currency symbol
+        5. VAT details: Find our VAT number (starts with GB) and any VAT charged
+        6. Payment terms: Calculate days between "Issue date" and "Due date"
 
-                        Document:
-                        ${text}
+        Document text:
+        ${text}`;
+    } else if (documentType === 'Purchase Order') {
+        prompt = `Extract these specific details from this Janssen PO document:
 
-                        Return ONLY the extracted information in a clear list format. If any item is not found, write "Not found" for that item.`
-                    }]
-                })
-            });
+        1. PO number: Find the number after "Purchase Order:" or similar
+        2. Bill to address: Find the exact address under "Bill To: (1)" - this is the mandatory invoice address
+        3. Currency: Find the currency code (e.g., GBP, EUR)
+        4. Payment terms: Look for "Payment terms:" followed by "Net X days"
+        5. VAT number: Find the client's VAT number (format: BE...)
+        6. Total amount: Find the total PO amount excluding VAT
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`API Error during ${documentType} extraction: ${errorData.error?.message || response.statusText}`);
-            }
+        NOTE: There may be multiple addresses (Ship To, Mail Invoice To, etc). Only use the "Bill To" address.
 
-            const data = await response.json();
-            return data.content[0].text;
-        }
+        Document text:
+        ${text}`;
+    }
 
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+            model: "claude-3-5-sonnet-latest",
+            max_tokens: 1024,
+            messages: [{
+                role: "user",
+                content: prompt
+            }]
+        })
+    });
+
+    const data = await response.json();
+    return data.content[0].text;
+}
         async function validateInvoice() {
             const errorElement = document.getElementById('error-message');
             const loadingElement = document.querySelector('.loading');
@@ -404,7 +416,7 @@
                         'anthropic-dangerous-direct-browser-access': 'true'
                     },
                     body: JSON.stringify({
-                        model: "claude-3-opus-20240229",
+                        model: "claude-3-5-sonnet-latest",
                         max_tokens: 1024,
                         messages: [{
                             role: "user",

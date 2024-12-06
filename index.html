@@ -288,14 +288,14 @@ async function extractKeyInfo(base64pdf, documentType, apiKey) {
     let prompt;
     
     if (documentType === 'Invoice') {
-        prompt = `Extract only the following fields from this Camino invoice. If any field is not explicitly present, mark it as "Not found" - do not make assumptions:
+        prompt = `Extract only the following fields from this Camino Communications Ltd invoice. Camino is a UK-based medical communications agency providing B2B services like consultancy, medical writing, and website development to pharmaceutical companies. If any field is not explicitly present, mark it as "Not found" - do not make assumptions:
 
         1. Job number: Find the exact project code (format like JJEUDR2402) from the Subject/Description
-        2. Job description: The full text description after the job number
+        2. Job description: The full text description after the job number. Pay special attention to any mentions of partial invoicing (e.g., "50% of total project value")
         3. PO number: The exact PO reference number
-        4. Client billing address: The complete address that comes after "Invoice for" or "Bill to" - this is who we're billing
-        5. Currency and amount: The grand total with currency symbol, excluding VAT
-        6. VAT details: Find any VAT values and whether VAT was charged
+        4. Client billing address: The complete address including country that comes after "Invoice for" or "Bill to" - this is who we're billing
+        5. Currency and amount: The grand total with currency symbol, excluding VAT. Note if this represents a partial invoice amount
+        6. VAT details: Check if VAT was applied. For UK clients, 20% VAT must be charged. For all non-UK business clients (including EU), VAT should be zero-rated as these are B2B services
         7. Payment terms: The exact days between issue date and due date
 
         Only extract information that is explicitly stated in the invoice - do not infer or guess missing information.`;
@@ -413,7 +413,16 @@ async function validateInvoice() {
                 max_tokens: 1024,
                 messages: [{
                     role: "user",
-                    content: `Compare these document summaries and check if they match according to our criteria. 
+                    content: `Compare these document summaries for a UK-based medical communications agency invoice. Consider these special rules:
+
+                    1. VAT Rules for B2B Services:
+                    - UK clients: Must charge 20% VAT
+                    - All non-UK business clients (including EU): Zero-rated VAT, regardless of VAT number status
+                    - Note: These are B2B services so we assume all clients are businesses
+
+                    2. Amount Matching:
+                    - Check if the invoice amount matches the PO amount, considering any partial invoicing
+                    - Example: If PO is for £50,000 and invoice description says "50% of total project", invoice should be for £25,000 (plus VAT if applicable)
                     
                     PO Summary:
                     ${poSummary}

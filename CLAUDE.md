@@ -46,7 +46,7 @@ Since this is a static HTML file with no build process:
 ## API Integration
 
 The application makes direct API calls to Claude (Anthropic) using:
-- Model: `claude-3-5-sonnet-20241022`
+- Model: `claude-sonnet-4-20250514`
 - PDF processing capability via base64 encoding
 - Two-stage process: extraction then comparison
 - Requires user-provided API key

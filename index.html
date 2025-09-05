@@ -220,6 +220,22 @@
             <div class="check-item">
                 <div class="icon">✓</div>
                 <div class="check-content">
+                    <div class="check-title">Invoice date (today)</div>
+                    <div class="check-explanation"></div>
+                </div>
+            </div>
+
+            <div class="check-item">
+                <div class="icon">✓</div>
+                <div class="check-content">
+                    <div class="check-title">Company name match</div>
+                    <div class="check-explanation"></div>
+                </div>
+            </div>
+
+            <div class="check-item">
+                <div class="icon">✓</div>
+                <div class="check-content">
                     <div class="check-title">Billing address</div>
                     <div class="check-explanation"></div>
                 </div>
@@ -323,11 +339,13 @@
             1. Job number: Find the exact project code (format like JJEUDR2402) from the Subject/Description
             2. Job description: The full text description after the job number. Pay special attention to any mentions of partial invoicing (e.g., "50% of total project value")
             3. PO number: The exact PO reference number
-            4. Client billing address: The complete address including country that comes after "Invoice for" or "Bill to" - this is who we're billing
-            5. Currency and amount: The grand total with currency symbol, excluding VAT. Note if this represents a partial invoice amount
-            6. VAT details: Check if VAT was applied. For UK clients, 20% VAT must be charged. For all non-UK business clients (including EU), VAT should be zero-rated as these are B2B services
-            7. Payment terms: The exact days between issue date and due date
-            8. Bank details: Look for the bank information in the footer or payment section. Extract the bank name, account location (city/country), and account holder name
+            4. Invoice date: Extract the exact invoice date and convert to YYYY-MMM-DD format (e.g., 2024-Sep-05) to avoid ambiguity
+            5. Client billing address: The complete address including country that comes after "Invoice for" or "Bill to" - this is who we're billing
+            6. Company name: Extract the exact company/organization name from the billing address section
+            7. Currency and amount: The grand total with currency symbol, excluding VAT. Note if this represents a partial invoice amount
+            8. VAT details: Check if VAT was applied. For UK clients, 20% VAT must be charged. For all non-UK business clients (including EU), VAT should be zero-rated as these are B2B services
+            9. Payment terms: The exact days between issue date and due date
+            10. Bank details: Look for the bank information in the footer or payment section. Extract the bank name, account location (city/country), and account holder name
 
             Only extract information that is explicitly stated in the invoice - do not infer or guess missing information.`;
         } else {
@@ -335,10 +353,11 @@
 
             1. PO number: The exact purchase order reference number
             2. Billing address: Look for the exact address labeled as "Bill to", "Invoice to", or similar mandatory billing address
-            3. Currency: The specified currency for payment
-            4. Payment terms: The exact payment terms (e.g., "Net 30 days", "60 days")
-            5. Total amount: The total PO value excluding VAT
-            6. Description: The full description of services ordered
+            3. Company name: Extract the exact company/organization name from the "Bill to" address section
+            4. Currency: The specified currency for payment
+            5. Payment terms: The exact payment terms (e.g., "Net 30 days", "60 days")
+            6. Total amount: The total PO value excluding VAT
+            7. Description: The full description of services ordered
 
             IMPORTANT: 
             - There may be multiple addresses. Only use the one specifically marked for billing/invoicing
@@ -428,6 +447,12 @@
             invoiceExtracted.textContent = 'Invoice Details:\n' + invoiceSummary;
             invoiceExtracted.style.display = 'block';
 
+            // Get today's date in YYYY-MMM-DD format
+            const today = new Date();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const todayFormatted = `${today.getFullYear()}-${monthNames[today.getMonth()]}-${String(today.getDate()).padStart(2, '0')}`;
+
             // Compare extracted information
             stepIndicator.textContent = 'Comparing documents...';
             const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -444,18 +469,24 @@
                     max_tokens: 1024,
                     messages: [{
                         role: "user",
-                        content: `Compare these document summaries for a UK-based medical communications agency invoice. Consider these special rules:
+                        content: `Compare these document summaries for a UK-based medical communications agency invoice. Today's date is ${todayFormatted}. Consider these special rules:
 
-                        1. VAT Rules for B2B Services:
+                        1. Invoice Date Validation:
+                        - Invoice date must be today's date
+
+                        2. Company Name Matching:
+                        - The company name on the invoice must match EXACTLY with the company name in the PO's "Bill to" address
+
+                        3. VAT Rules for B2B Services:
                         - UK clients: Must charge 20% VAT
                         - All non-UK business clients (including EU): Zero-rated VAT, regardless of VAT number status
                         - Note: These are B2B services so we assume all clients are businesses
 
-                        2. Amount Matching:
+                        4. Amount Matching:
                         - Check if the invoice amount matches the PO amount, considering any partial invoicing
                         - Example: If PO is for £50,000 and invoice description says "50% of total project", invoice should be for £25,000 (plus VAT if applicable)
                         
-                        3. Bank Account Rules:
+                        5. Bank Account Rules:
                         - USD payments: Must use Wise account in Woodhaven, NY
                         - EUR payments: Must use Wise account in Brussels
                         - GBP payments: Must use Allica Bank account in London
@@ -474,6 +505,14 @@
                                 "explanation": "detailed explanation"
                             },
                             "poNumber": {
+                                "pass": true/false,
+                                "explanation": "detailed explanation"
+                            },
+                            "invoiceDate": {
+                                "pass": true/false,
+                                "explanation": "detailed explanation"
+                            },
+                            "companyName": {
                                 "pass": true/false,
                                 "explanation": "detailed explanation"
                             },
@@ -513,7 +552,7 @@
             const result = JSON.parse(data.content[0].text);
             
             // Update the results in the UI
-            const checks = ['jobNumber', 'poNumber', 'billingAddress', 'currency', 'vat', 'paymentTerms', 'bankDetails'];
+            const checks = ['jobNumber', 'poNumber', 'invoiceDate', 'companyName', 'billingAddress', 'currency', 'vat', 'paymentTerms', 'bankDetails'];
             checks.forEach((check, index) => {
                 const checkItem = document.querySelectorAll('.check-item')[index];
                 const icon = checkItem.querySelector('.icon');

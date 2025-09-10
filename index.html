@@ -330,6 +330,43 @@
         });
     }
 
+    // Safely parse model output into JSON, tolerating code fences or extra text
+    function parseModelJson(text) {
+        if (!text || typeof text !== 'string') {
+            throw new Error('Empty response from model');
+        }
+
+        let raw = text.trim();
+
+        // Strip Markdown code fences if present
+        if (raw.startsWith('```')) {
+            raw = raw.replace(/^```(?:json)?\s*/i, '');
+            const fenceIndex = raw.lastIndexOf('```');
+            if (fenceIndex !== -1) {
+                raw = raw.slice(0, fenceIndex).trim();
+            }
+        }
+
+        // Try direct parse first
+        try {
+            return JSON.parse(raw);
+        } catch (e1) {
+            // Fallback: extract the first top-level JSON object
+            const start = raw.indexOf('{');
+            const end = raw.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && end > start) {
+                const candidate = raw.slice(start, end + 1);
+                try {
+                    return JSON.parse(candidate);
+                } catch (e2) {
+                    // Fall through to error below
+                }
+            }
+            const preview = raw.slice(0, 400);
+            throw new Error(`Failed to parse model JSON. Preview: ${preview}`);
+        }
+    }
+
     async function extractKeyInfo(base64pdf, documentType, apiKey) {
         let prompt;
         
@@ -397,6 +434,15 @@
                 }]
             })
         });
+
+        if (!response.ok) {
+            let errMsg = response.statusText;
+            try {
+                const err = await response.json();
+                errMsg = err?.error?.message || JSON.stringify(err);
+            } catch (_) {}
+            throw new Error(`API Error during extraction: ${errMsg}`);
+        }
 
         const data = await response.json();
         return data.content[0].text;
@@ -498,7 +544,7 @@
                         Invoice Summary:
                         ${invoiceSummary}
 
-                        Provide your response in this exact JSON format:
+                        Provide your response in this exact JSON format and return ONLY the JSON object (no backticks, no markdown, no commentary):
                         {
                             "jobNumber": {
                                 "pass": true/false,
@@ -549,7 +595,7 @@
 
             stepIndicator.textContent = 'Finalising results...';
             const data = await response.json();
-            const result = JSON.parse(data.content[0].text);
+            const result = parseModelJson(data.content?.[0]?.text || '');
             
             // Update the results in the UI
             const checks = ['jobNumber', 'poNumber', 'invoiceDate', 'companyName', 'billingAddress', 'currency', 'vat', 'paymentTerms', 'bankDetails'];
